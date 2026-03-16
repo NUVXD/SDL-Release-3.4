@@ -93,6 +93,8 @@ jobs:
           # Copy license and credits
           cp LICENSE.txt /tmp/submodule/
           cp CREDITS.md /tmp/submodule/
+          cp  README.md /tmp/submodule/
+          cp WhatsNew.txt /tmp/submodule/
 
           # Copy DLLs and import libs for each architecture
           cp /tmp/libs/x86/bin/SDL3.dll  /tmp/submodule/lib/x86/
