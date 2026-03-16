@@ -1,0 +1,116 @@
+name: 'Build Submodule'
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+concurrency:
+  group: submodule-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: 'Build Windows (${{ matrix.arch }})'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - arch: x86
+            cmake_arch: Win32
+          - arch: x64
+            cmake_arch: x64
+          - arch: arm64
+            cmake_arch: ARM64
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+
+      - name: 'Configure CMake (${{ matrix.arch }})'
+        run: |
+          cmake -S . -B build `
+            -G "Visual Studio 17 2022" `
+            -A ${{ matrix.cmake_arch }} `
+            -DSDL_SHARED=ON `
+            -DSDL_STATIC=OFF `
+            -DSDL_TEST_LIBRARY=OFF `
+            -DSDL_TESTS=OFF `
+            -DSDL_DISABLE_INSTALL_DOCS=ON `
+            -DCMAKE_INSTALL_PREFIX=install
+
+      - name: 'Build (${{ matrix.arch }})'
+        run: cmake --build build --config Release
+
+      - name: 'Install (${{ matrix.arch }})'
+        run: cmake --install build --config Release --prefix install
+
+      - name: 'Upload libs (${{ matrix.arch }})'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libs-${{ matrix.arch }}
+          path: install
+
+  update-submodule-branch:
+    name: 'Update Submodule Branch'
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 'Checkout'
+        uses: actions/checkout@v4
+
+      - name: 'Download x86 libs'
+        uses: actions/download-artifact@v4
+        with:
+          name: libs-x86
+          path: /tmp/libs/x86
+
+      - name: 'Download x64 libs'
+        uses: actions/download-artifact@v4
+        with:
+          name: libs-x64
+          path: /tmp/libs/x64
+
+      - name: 'Download arm64 libs'
+        uses: actions/download-artifact@v4
+        with:
+          name: libs-arm64
+          path: /tmp/libs/arm64
+
+      - name: 'Prepare Submodule branch content'
+        run: |
+          mkdir -p /tmp/submodule/include
+          mkdir -p /tmp/submodule/lib/x86
+          mkdir -p /tmp/submodule/lib/x64
+          mkdir -p /tmp/submodule/lib/arm64
+
+          # Copy headers
+          cp -r include/SDL3 /tmp/submodule/include/
+
+          # Copy license and credits
+          cp LICENSE.txt /tmp/submodule/
+          cp CREDITS.md /tmp/submodule/
+
+          # Copy DLLs and import libs for each architecture
+          cp /tmp/libs/x86/bin/SDL3.dll  /tmp/submodule/lib/x86/
+          cp /tmp/libs/x86/lib/SDL3.lib  /tmp/submodule/lib/x86/
+          cp /tmp/libs/x64/bin/SDL3.dll  /tmp/submodule/lib/x64/
+          cp /tmp/libs/x64/lib/SDL3.lib  /tmp/submodule/lib/x64/
+          cp /tmp/libs/arm64/bin/SDL3.dll /tmp/submodule/lib/arm64/
+          cp /tmp/libs/arm64/lib/SDL3.lib /tmp/submodule/lib/arm64/
+
+      - name: 'Push to Submodule branch'
+        run: |
+          cd /tmp/submodule
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b Submodule
+          git add .
+          git commit -m "Update Submodule from ${{ github.sha }}"
+          git push --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            Submodule
