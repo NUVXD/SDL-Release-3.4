@@ -402,6 +402,11 @@ extern "C" {
  * - "Movie" - Music or sound with dialog
  * - "Media" - Music or sound without dialog
  *
+ * Android's AAudio target supports this hint as of SDL 3.4.4. Android does
+ * not support the exact same options as WASAPI, but for portability, will
+ * attempt to map these same strings to the `aaudio_usage_t` constants. For
+ * example, "Movie" and "Media" will both map to `AAUDIO_USAGE_MEDIA`, etc.
+ *
  * If your application applies its own echo cancellation, gain control, and
  * noise reduction it should also set SDL_HINT_AUDIO_DEVICE_RAW_STREAM.
  *
@@ -1146,21 +1151,6 @@ extern "C" {
 #define SDL_HINT_GPU_DRIVER "SDL_GPU_DRIVER"
 
 /**
- * A variable that specifies the library name to use when loading the OpenXR
- * loader.
- *
- * By default, SDL will try the system default name, but on some platforms
- * like Windows, debug builds of the OpenXR loader have a different name, and
- * are not always directly compatible with release applications. Setting this
- * hint allows you to compensate for this difference in your app when
- * applicable.
- *
- * This hint should be set before the OpenXR loader is loaded. For example,
- * creating an OpenXR GPU device will load the OpenXR loader.
- */
-#define SDL_HINT_OPENXR_LIBRARY "SDL_OPENXR_LIBRARY"
-
-/**
  * A variable to control whether SDL_hid_enumerate() enumerates all HID
  * devices or only controllers.
  *
@@ -1343,23 +1333,6 @@ extern "C" {
 #define SDL_HINT_JOYSTICK_DEVICE "SDL_JOYSTICK_DEVICE"
 
 /**
- * A variable containing a list of drum style controllers.
- *
- * The format of the string is a comma separated list of USB VID/PID pairs in
- * hexadecimal form, e.g.
- *
- * `0xAAAA/0xBBBB,0xCCCC/0xDDDD`
- *
- * The variable can also take the form of "@file", in which case the named
- * file will be loaded and interpreted as the value of the variable.
- *
- * This hint can be set anytime.
- *
- * \since This hint is available since SDL 3.4.4.
- */
-#define SDL_HINT_JOYSTICK_DRUM_DEVICES "SDL_JOYSTICK_DRUM_DEVICES"
-
-/**
  * A variable controlling whether enhanced reports should be used for
  * controllers when using the HIDAPI driver.
  *
@@ -1440,6 +1413,26 @@ extern "C" {
 #define SDL_HINT_JOYSTICK_GAMEINPUT "SDL_JOYSTICK_GAMEINPUT"
 
 /**
+ * A variable controlling whether GameInput should be used for handling 
+ * GIP devices that require raw report processing, but aren't supported 
+ * by HIDRAW, such as Xbox One Guitars.
+ * 
+ * Note that this is only supported with GameInput 3 or newer.
+ *
+ * The variable can be set to the following values:
+ *
+ * - "0": GameInput is not used to handle raw GIP devices.
+ * - "1": GameInput is used.
+ *
+ * The default is "1" when using GameInput 3 or newer, and is "0" otherwise.
+ *
+ * This hint should be set before SDL is initialized.
+ *
+ * \since This hint is available since SDL 3.4.4.
+ */
+#define SDL_HINT_JOYSTICK_GAMEINPUT_RAW "SDL_JOYSTICK_GAMEINPUT_RAW"
+
+/**
  * A variable containing a list of devices known to have a GameCube form
  * factor.
  *
@@ -1477,23 +1470,6 @@ extern "C" {
  * \since This hint is available since SDL 3.2.0.
  */
 #define SDL_HINT_JOYSTICK_GAMECUBE_DEVICES_EXCLUDED "SDL_JOYSTICK_GAMECUBE_DEVICES_EXCLUDED"
-
-/**
- * A variable containing a list of guitar style controllers.
- *
- * The format of the string is a comma separated list of USB VID/PID pairs in
- * hexadecimal form, e.g.
- *
- * `0xAAAA/0xBBBB,0xCCCC/0xDDDD`
- *
- * The variable can also take the form of "@file", in which case the named
- * file will be loaded and interpreted as the value of the variable.
- *
- * This hint can be set anytime.
- *
- * \since This hint is available since SDL 3.4.4.
- */
-#define SDL_HINT_JOYSTICK_GUITAR_DEVICES "SDL_JOYSTICK_GUITAR_DEVICES"
 
 /**
  * A variable controlling whether the HIDAPI joystick drivers should be used.
@@ -1926,23 +1902,6 @@ extern "C" {
  * \since This hint is available since SDL 3.4.0.
  */
 #define SDL_HINT_JOYSTICK_HIDAPI_FLYDIGI "SDL_JOYSTICK_HIDAPI_FLYDIGI"
-
-/**
- * A variable controlling whether the HIDAPI driver for GameSir controllers
- * should be used.
- *
- * The variable can be set to the following values:
- *
- * - "0": HIDAPI driver is not used.
- * - "1": HIDAPI driver is used.
- *
- * The default is the value of SDL_HINT_JOYSTICK_HIDAPI.
- *
- * This hint should be set before initializing joysticks and gamepads.
- *
- * \since This hint is available since SDL 3.5.0.
- */
-#define SDL_HINT_JOYSTICK_HIDAPI_GAMESIR "SDL_JOYSTICK_HIDAPI_GAMESIR"
 
 /**
  * A variable controlling whether the HIDAPI driver for Nintendo Switch
@@ -3048,13 +3007,11 @@ extern "C" {
  * whether SDL follows this default behaviour or will always load an OpenGL ES
  * library.
  *
- * Circumstances where this is useful include:
- *
- * - Testing an app with a particular OpenGL ES implementation, e.g ANGLE, or
- *   emulator, e.g. those from ARM, Imagination or Qualcomm.
- * - Resolving OpenGL ES function addresses at link time by linking with the
- *   OpenGL ES library instead of querying them at run time with
- *   SDL_GL_GetProcAddress().
+ * Circumstances where this is useful include - Testing an app with a
+ * particular OpenGL ES implementation, e.g ANGLE, or emulator, e.g. those
+ * from ARM, Imagination or Qualcomm. - Resolving OpenGL ES function addresses
+ * at link time by linking with the OpenGL ES library instead of querying them
+ * at run time with SDL_GL_GetProcAddress().
  *
  * Caution: for an application to work with the default behaviour across
  * different OpenGL drivers it must query the OpenGL ES function addresses at
@@ -4592,8 +4549,7 @@ extern "C" {
  *
  * This enables the window to still receive input even if not in foreground.
  *
- * Focused windows that receive text input will still prevent input events
- * from triggering.
+ * Focused windows that receive text input will still prevent input events from triggering.
  *
  * - "0": Input is not received when not in focus or foreground. (default)
  * - "1": Input will be received even when not in focus or foreground.
